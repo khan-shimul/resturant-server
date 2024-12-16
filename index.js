@@ -2,15 +2,27 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.up5eg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production' ? true : false,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+};
+
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -21,6 +33,17 @@ const client = new MongoClient(uri, {
   }
 });
 
+ // Verify Middleware
+ const verifyToken = async(req, res, next) => {
+  const token = req.cookies.token;
+  if(!token) return res.status(401).send({message: 'Forbidden Access'});
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+    if(error) return res.status(401).send({message: 'Forbidden Access'});
+    req.decode = decoded
+    next();
+  })
+}
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -30,8 +53,24 @@ async function run() {
     const reviewCollection = client.db('bistroBossDB').collection('reviews');
     const cartCollection = client.db('bistroBossDB').collection('carts');
 
+    // Authentication by jwt
+    app.post('/jwt', async(req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
+      res
+      .cookie('token', token, cookieOptions)
+      .send({success: true});
+      // if work with localstorage
+      // res.send({token}) ----- and receive it from client side and set token to localstorage
+    });
+    app.get('/logout', async(req, res) => {
+      res
+      .clearCookie('token', cookieOptions)
+      .send({success: true})
+    })
+   
     // users related api
-    app.get('/users', async (req, res) => {
+    app.get('/users', verifyToken, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     })
@@ -54,7 +93,7 @@ async function run() {
         }
       };
       const result = await userCollection.updateOne(filter, updatedDoc);
-      res.send(result)
+      res.send(result);
     });
     app.delete('/users/:id', async(req, res) => {
       const id = req.params.id;
@@ -62,6 +101,18 @@ async function run() {
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
+    // is admin checking api
+    app.get('/users/admin/:email', verifyToken, async(req, res) => {
+      const email = req.params.email;
+      if(email !== req.decode.email) return res.status(403).send({message: 'Unauthorized Access'});
+      const query = {email: email};
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if(user){
+        admin = user.role === 'admin'
+      }
+      res.send({admin});
+    })
 
     // menu related api
     app.get('/menu', async(req, res) => {
@@ -74,7 +125,7 @@ async function run() {
     });
 
     // Cart collection
-    app.get('/carts', async(req, res) => {
+    app.get('/carts', verifyToken, async(req, res) => {
       const email = req.query.email;
       const query = {email: email}
       const result = await cartCollection.find(query).toArray();
