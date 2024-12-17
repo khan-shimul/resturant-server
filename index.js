@@ -33,17 +33,6 @@ const client = new MongoClient(uri, {
   }
 });
 
- // Verify Middleware
- const verifyToken = async(req, res, next) => {
-  const token = req.cookies.token;
-  if(!token) return res.status(401).send({message: 'Forbidden Access'});
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-    if(error) return res.status(401).send({message: 'Forbidden Access'});
-    req.decode = decoded
-    next();
-  })
-}
-
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -52,6 +41,26 @@ async function run() {
     const menuCollection = client.db('bistroBossDB').collection('menu');
     const reviewCollection = client.db('bistroBossDB').collection('reviews');
     const cartCollection = client.db('bistroBossDB').collection('carts');
+
+    // Verify Middleware
+    const verifyToken = async(req, res, next) => {
+      const token = req.cookies.token;
+      if(!token) return res.status(401).send({message: 'Forbidden Access'});
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if(error) return res.status(401).send({message: 'Forbidden Access'});
+        req.decode = decoded
+        next();
+      })
+    };
+    // Verify Admin after checking token
+    const verifyAdmin = async(req, res, next) => {
+      const email = req.decode.email;
+      const query = {email: email};
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === 'admin';
+      if(!isAdmin) return res.status(403).send({message: 'Unauthorized Access'});
+      next();
+    }
 
     // Authentication by jwt
     app.post('/jwt', async(req, res) => {
@@ -70,7 +79,7 @@ async function run() {
     })
    
     // users related api
-    app.get('/users', verifyToken, async (req, res) => {
+    app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     })
@@ -84,7 +93,7 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
-    app.patch('/users/admin/:id', async(req, res) => {
+    app.patch('/users/admin/:id', verifyToken, verifyAdmin, async(req, res) => {
       const id = req.params.id;
       const filter = {_id: new ObjectId(id)};
       const updatedDoc = {
@@ -95,7 +104,7 @@ async function run() {
       const result = await userCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
-    app.delete('/users/:id', async(req, res) => {
+    app.delete('/users/:id', verifyToken, verifyAdmin, async(req, res) => {
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await userCollection.deleteOne(query);
@@ -125,7 +134,7 @@ async function run() {
     });
 
     // Cart collection
-    app.get('/carts', verifyToken, async(req, res) => {
+    app.get('/carts', async(req, res) => {
       const email = req.query.email;
       const query = {email: email}
       const result = await cartCollection.find(query).toArray();
