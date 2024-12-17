@@ -116,11 +116,13 @@ async function run() {
       if(email !== req.decode.email) return res.status(403).send({message: 'Unauthorized Access'});
       const query = {email: email};
       const user = await userCollection.findOne(query);
-      let admin = false;
-      if(user){
-        admin = user.role === 'admin'
-      }
-      res.send({admin});
+      // let admin = false;
+      // if(user){
+      //   admin = user.role === 'admin'
+      // }
+      // res.send({admin});
+      const admin = user.role === 'admin';
+      res.send({admin})
     })
 
     // menu related api
