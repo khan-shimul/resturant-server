@@ -57,7 +57,7 @@ async function run() {
       const email = req.decode.email;
       const query = {email: email};
       const user = await userCollection.findOne(query);
-      const isAdmin = user?.role === 'admin';
+      const isAdmin = user.role === 'admin';
       if(!isAdmin) return res.status(403).send({message: 'Unauthorized Access'});
       next();
     }
@@ -130,6 +130,11 @@ async function run() {
         const result = await menuCollection.find().toArray();
         res.send(result);
     });
+    app.post('/menu', verifyToken, verifyAdmin, async(req, res) => {
+      const menuItem = req.body;
+      const result = await menuCollection.insertOne(menuItem);
+      res.send(result);
+    })
     app.get('/reviews', async(req, res) => {
         const result = await reviewCollection.find().toArray();
         res.send(result);
