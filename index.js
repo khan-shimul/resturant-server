@@ -42,13 +42,18 @@ async function run() {
     const menuCollection = client.db('bistroBossDB').collection('menu');
     const reviewCollection = client.db('bistroBossDB').collection('reviews');
     const cartCollection = client.db('bistroBossDB').collection('carts');
+    const paymentCollection = client.db('bistroBossDB').collection('payments');
 
     // Verify Middleware
     const verifyToken = async(req, res, next) => {
       const token = req.cookies.token;
-      if(!token) return res.status(401).send({message: 'Forbidden Access'});
+      if(!token) {
+        return res.status(401).send({message: 'Forbidden Access'});
+      }
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-        if(error) return res.status(401).send({message: 'Forbidden Access'});
+        if(error) {
+          return res.status(401).send({message: 'Forbidden Access'});
+        }
         req.decode = decoded
         next();
       })
@@ -201,6 +206,27 @@ async function run() {
         clientSecret: paymentIntent.client_secret,
       })
     });
+    // payment details post api
+    app.get('/payments/:email', verifyToken, async(req, res) => {
+     const email = req.params.email;
+     if(email !== req.decode.email) {
+      return res.status(403).send({message: 'Unauthorized Access'})
+     }
+     const query = {email: email};
+     const result = await paymentCollection.find(query).toArray();
+     res.send(result)
+    })
+    app.post('/payments', async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+      // carefully deleted cart items
+      const query = {_id: {
+        $in: payment.cartIds.map(id => new ObjectId(id))
+      }};
+      console.log('query', query)
+      const cartDeleteResult = await cartCollection.deleteMany(query);
+      res.send({paymentResult, cartDeleteResult});
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
