@@ -223,9 +223,36 @@ async function run() {
       const query = {_id: {
         $in: payment.cartIds.map(id => new ObjectId(id))
       }};
-      console.log('query', query)
       const cartDeleteResult = await cartCollection.deleteMany(query);
       res.send({paymentResult, cartDeleteResult});
+    })
+
+    // Admin stats/analytics
+    app.get('/admin-stats', verifyToken, verifyAdmin, async(req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const menuItems = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+      // its not the best way
+      // const payments = await paymentCollection.find().toArray();
+      // const revenue = payments.reduce((total, payment) => total + payment.price,0)
+
+      // The Best way to calculate total revenue
+      const result = await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {$sum: '$price'}
+          }
+        }
+      ]).toArray();
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenue
+      })
     })
 
     // Send a ping to confirm a successful connection
