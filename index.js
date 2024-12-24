@@ -235,7 +235,6 @@ async function run() {
       // its not the best way
       // const payments = await paymentCollection.find().toArray();
       // const revenue = payments.reduce((total, payment) => total + payment.price,0)
-
       // The Best way to calculate total revenue
       const result = await paymentCollection.aggregate([
         {
@@ -253,6 +252,42 @@ async function run() {
         orders,
         revenue
       })
+    });
+
+    // Aggregate for order stats - total ordered quantity for each category and price
+    app.get('/order-stats', verifyToken, verifyAdmin, async(req, res) => {
+      const result = await paymentCollection.aggregate([
+        {
+          $unwind: '$menuIds'
+        },
+        {
+          $lookup: {
+            from: 'menu',
+            localField: 'menuIds',
+            foreignField: '_id',
+            as: 'menuItems'
+          }
+        },
+        {
+          $unwind: '$menuItems'
+        },
+        {
+          $group: {
+            _id: '$menuItems.category',
+            quantity: {$sum: 1},
+            revenue: {$sum: '$menuItems.price'}
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            category: '$_id',
+            quantity: '$quantity',
+            revenue: '$revenue'
+          }
+        }
+      ]).toArray();
+      res.send(result)
     })
 
     // Send a ping to confirm a successful connection
