@@ -10,7 +10,11 @@ const port = process.env.PORT || 5000;
 
 // middleware
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: [
+    'http://localhost:5173',
+   'https://bistro-boss-ce76b.web.app',
+   'https://bistro-boss-ce76b.firebaseapp.com'
+   ],
   credentials: true
 }));
 app.use(express.json());
@@ -37,7 +41,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     const userCollection = client.db('bistroBossDB').collection('users');
     const menuCollection = client.db('bistroBossDB').collection('menu');
     const reviewCollection = client.db('bistroBossDB').collection('reviews');
@@ -232,7 +236,7 @@ async function run() {
       const users = await userCollection.estimatedDocumentCount();
       const menuItems = await menuCollection.estimatedDocumentCount();
       const orders = await paymentCollection.estimatedDocumentCount();
-      
+
       // its not the best way
       // const payments = await paymentCollection.find().toArray();
       // const revenue = payments.reduce((total, payment) => total + payment.price,0)
@@ -292,8 +296,8 @@ async function run() {
     })
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
